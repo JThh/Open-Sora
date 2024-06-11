@@ -1,11 +1,9 @@
 import os
-
 import colossalai
 import torch
 import torch.distributed as dist
 from colossalai.cluster import DistCoordinator
 from mmengine.runner import set_random_seed
-
 from opensora.acceleration.parallel_states import set_sequence_parallel_group
 from opensora.datasets import IMG_FPS, save_sample
 from opensora.models.text_encoder.t5 import text_preprocessing
@@ -13,6 +11,9 @@ from opensora.registry import MODELS, SCHEDULERS, build_module
 from opensora.utils.config_utils import parse_configs
 from opensora.utils.misc import to_torch_dtype
 
+def log_peak_memory():
+    peak_memory = torch.cuda.max_memory_allocated() / (1024 ** 3)  # Convert to GB
+    print(f"Peak GPU memory usage: {peak_memory:.2f} GB")
 
 def main():
     # ======================================================
@@ -109,6 +110,9 @@ def main():
     save_dir = cfg.save_dir
     os.makedirs(save_dir, exist_ok=True)
 
+    # Reset peak memory stats
+    torch.cuda.reset_peak_memory_stats()
+
     # 4.1. batch generation
     for i in range(0, len(prompts), cfg.batch_size):
         # 4.2 sample in hidden space
@@ -169,6 +173,11 @@ def main():
                     save_sample(sample, fps=cfg.fps // cfg.frame_interval, save_path=save_path)
                     sample_idx += 1
 
+            # Log peak memory usage after each sample
+            log_peak_memory()
+
+    # Final log of peak memory usage
+    log_peak_memory()
 
 if __name__ == "__main__":
     main()
